@@ -67,10 +67,16 @@ while True:
 
             # If a gun is detected, print a message
             if class_name == 'gun':
-                print("Gun detected!")
+                cv2.putText(frame, 'Gun Detected!', (int(x1), int(y1) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+
+            if class_name in ['fight', 'violent_move']:
+                cv2.putText(frame, 'Fight Detected!', (int(x1), int(y1) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+                
+           
 
     # Display the number of people detected on the frame
     cv2.putText(frame, f'People Count: {person_count}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+
 
     # Display the frame with detections
     cv2.imshow('Security Alarm System', frame)
