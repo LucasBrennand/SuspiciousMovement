@@ -23,15 +23,15 @@ coco_class_names = {
 }
 
 # Ask the user if they want to open the camera or process a video file
-choice = input("Would you like to open the camera or process a video file? (camera/video): ").strip().lower()
+choice = input("Gostaria de abrir a camera ou um video? (camera/video): ").strip().lower()
 
 if choice == 'camera':
     cap = cv2.VideoCapture(0)
 elif choice == 'video':
-    video_path = input("Enter the path to the video file: ").strip()
+    video_path = input("Digite o arquivo do video: ").strip()
     cap = cv2.VideoCapture(video_path)
 else:
-    print("Invalid choice. Exiting...")
+    print("Escolha inválida. Saindo...")
     exit()
 
 while True:
