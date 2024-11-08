@@ -15,25 +15,21 @@ pose = mp_pose.Pose(static_image_mode=False,
                     min_detection_confidence=0.5,
                     min_tracking_confidence=0.5)
 
-# Load the video file
 video_path = './video2.mp4'
 cap = cv2.VideoCapture(video_path)
 
-# Check if video opened successfully
 if not cap.isOpened():
     print("Error: Could not open video file.")
     exit()
 
 round_number = 1
 round_duration = 5 * 60
-round_start_time = (round_number - 1) * round_duration  # Start time of the round
-round_end_time = round_number * round_duration  # End time of the round
-
-# Frame rate (frames per second)
+round_start_time = (round_number - 1) * round_duration
+round_end_time = round_number * round_duration
 fps = cap.get(cv2.CAP_PROP_FPS)
 frame_count = 0
-round_start_frame = int(round_start_time * fps)  # Calculate starting frame for the round
-round_end_frame = int(round_end_time * fps)  # Calculate ending frame for the round
+round_start_frame = int(round_start_time * fps)
+round_end_frame = int(round_end_time * fps)
 total_strikes_F1 = 0
 total_strikes_F2 = 0
 knockdowns_F1 = 0
@@ -41,12 +37,10 @@ knockdowns_F2 = 0
 takedowns_F1 = 0
 takedowns_F2 = 0
 
-
-# Helper function to calculate angle between three points
 def calculate_angle(a, b, c):
-    a = np.array(a)  # First point
-    b = np.array(b)  # Mid point
-    c = np.array(c)  # End point
+    a = np.array(a)
+    b = np.array(b)
+    c = np.array(c)
 
     radians = np.arctan2(c[1] - b[1], c[0] - b[0]) - \
               np.arctan2(a[1] - b[1], a[0] - b[0])
@@ -57,8 +51,6 @@ def calculate_angle(a, b, c):
 
     return angle
 
-
-# Function to infer strikes based on arm angles
 def detect_strike(landmarks, side='right'):
     # Define keypoints indices based on MediaPipe Pose
     # Right side: Shoulder=12, Elbow=14, Wrist=16
@@ -110,19 +102,16 @@ def detect_takedown(landmarks_prev, landmarks_current, side='left', orientation_
         return True
     return False
 
-# Initialize previous landmarks for takedown detection
 prev_landmarks_F1 = None
 prev_landmarks_F2 = None
 
-# **Set desired frame width and height to resize (Added Section)**
 desired_width = 1280
 desired_height = 720
 
-# Loop through frames in the video, focusing on the selected round
 while cap.isOpened():
-    ret, frame = cap.read()  # Read a frame
+    ret, frame = cap.read()
     if not ret:
-        break  # End of video
+        break
 
 
     # Resize the frame to the desired size (Added Section)
@@ -130,36 +119,25 @@ while cap.isOpened():
 
     # Process frames within the round's timeframe
     if round_start_frame <= frame_count <= round_end_frame:
-        if frame_count % int(fps) == 0:  # Process every second
-            # YOLOv8: Detect objects in the frame
+        if frame_count % int(fps) == 0:
             results = model(frame)
-
-            # Extract detections from the results (use results[0] since results is a list)
-            detections = results[0].boxes  # Get bounding boxes
-
-            # Filter out only "person" detections
+            detections = results[0].boxes
             person_detections = [d for d in detections if int(d.cls[0]) == 0]  # Class 0 is 'person'
 
             if len(person_detections) >= 2:
-                # Sort persons by their size (area of the bounding box) to identify the two largest (fighters)
                 person_detections.sort(key=lambda x: (x.xyxy[0][2] - x.xyxy[0][0]) * (x.xyxy[0][3] - x.xyxy[0][1]),
                                        reverse=True)
-                fighter_1 = person_detections[0]  # Largest person detected
-                fighter_2 = person_detections[1]  # Second largest person detected
-
-                # Extract bounding box coordinates
+                fighter_1 = person_detections[0]
+                fighter_2 = person_detections[1]
                 x1_min, y1_min, x1_max, y1_max = fighter_1.xyxy[0].tolist()
                 x2_min, y2_min, x2_max, y2_max = fighter_2.xyxy[0].tolist()
 
-                # Crop the fighter regions for pose estimation
                 fighter_1_crop = frame[int(y1_min):int(y1_max), int(x1_min):int(x1_max)]
                 fighter_2_crop = frame[int(y2_min):int(y2_max), int(x2_min):int(x2_max)]
 
-                # Perform pose estimation
                 results_f1 = pose.process(cv2.cvtColor(fighter_1_crop, cv2.COLOR_BGR2RGB))
                 results_f2 = pose.process(cv2.cvtColor(fighter_2_crop, cv2.COLOR_BGR2RGB))
 
-                # Extract landmarks
                 if results_f1.pose_landmarks:
                     landmarks_f1 = [(lm.x, lm.y, lm.z) for lm in results_f1.pose_landmarks.landmark]
                     # Detect strike for Fighter 1
@@ -188,7 +166,6 @@ while cap.isOpened():
                             print(f"Takedown detected for Fighter 2 at frame {frame_count}")
                     prev_landmarks_F2 = landmarks_f2
 
-                # Function to map landmarks from cropped to main frame coordinates
                 def map_landmarks(landmarks, bbox):
                     x_min, y_min, x_max, y_max = bbox
                     width = x_max - x_min
@@ -200,8 +177,6 @@ while cap.isOpened():
                         mapped.append((x, y))
                     return mapped
 
-
-                # Map landmarks to main frame coordinates
                 if results_f1.pose_landmarks:
                     mapped_landmarks_f1 = map_landmarks(landmarks_f1, (x1_min, y1_min, x1_max, y1_max))
                 else:
@@ -217,7 +192,6 @@ while cap.isOpened():
 
                 # Draw landmarks and connections for Person 1
                 if mapped_landmarks_f1:
-                    # Convert to MediaPipe's Landmark format
                     landmarks_proto_f1 = mp_pose.PoseLandmark
                     for connection in mp_pose.POSE_CONNECTIONS:
                         start_idx, end_idx = connection
@@ -249,15 +223,13 @@ while cap.isOpened():
 
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 font_scale = 1
-                font_color = (0, 255, 255)  # Yellow color
+                font_color = (255, 0, 0)
                 thickness = 2
                 line_type = cv2.LINE_AA
 
-                # Prepare the strike count texts
                 text_F1 = f"Person 1 attacks: {total_strikes_F1}"
                 text_F2 = f"Person 2 attacks: {total_strikes_F2}"
 
-                # Put the texts on the frame
                 cv2.putText(frame, text_F1, (10, 30), font, font_scale, font_color, thickness, line_type)
                 cv2.putText(frame, text_F2, (10, 70), font, font_scale, font_color, thickness, line_type)
 

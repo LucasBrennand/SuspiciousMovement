@@ -19,10 +19,9 @@ coco_class_names = {
     60: 'dining table', 61: 'toilet', 62: 'TV', 63: 'laptop', 64: 'mouse', 65: 'remote', 66: 'keyboard',
     67: 'cell phone', 68: 'microwave', 69: 'oven', 70: 'toaster', 71: 'sink', 72: 'refrigerator',
     73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier', 79: 'toothbrush',
-    80: 'gun'  # Add gun class if it exists in your model
+    80: 'gun'
 }
 
-# Ask the user if they want to open the camera or process a video file
 choice = input("Gostaria de abrir a camera ou um video? (camera/video): ").strip().lower()
 
 if choice == 'camera':
@@ -35,33 +34,26 @@ else:
     exit()
 
 while True:
-    ret, frame = cap.read()  # Read frame from webcam or video file
+    ret, frame = cap.read()
     if not ret:
         break
 
-    # Perform object detection on the frame
     results = model.predict(source=frame)
-    
-    person_count = 0  # Initialize person counter
+    person_count = 0
 
-    # Loop through detections
     for result in results:
         for box in result.boxes.data:
             x1, y1, x2, y2, score, class_id = box
 
-            # Convert class_id to integer and get class name
             class_id = int(class_id)
             class_name = coco_class_names.get(class_id, 'Unknown')
 
-            # If the detected object is a person, increment the counter
             if class_name == 'person':
                 person_count += 1
 
-            # Draw bounding box for every detected object
             cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
             cv2.putText(frame, f'{class_name}: {score:.2f}', (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
-            # If a knife is detected (class ID 43), trigger the buzzer
             if class_id == 0:
                 cv2.putText(frame, 'Person Detected!', (int(x1), int(y1) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
@@ -81,11 +73,9 @@ while True:
     # Display the frame with detections
     cv2.imshow('Security Alarm System', frame)
 
-    # Exit if 'q' is pressed
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# Release resources
 cap.release()
 cv2.destroyAllWindows()
 pygame.mixer.quit()
