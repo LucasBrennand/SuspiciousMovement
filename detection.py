@@ -1,5 +1,7 @@
 import cv2
 import pygame
+import numpy as np
+import torch
 from ultralytics import YOLO
 
 # Initialize YOLOv8 model with the pre-trained weights
@@ -21,6 +23,9 @@ coco_class_names = {
     73: 'book', 74: 'clock', 75: 'vase', 76: 'scissors', 77: 'teddy bear', 78: 'hair drier', 79: 'toothbrush',
     80: 'gun'
 }
+count = 0
+number_of_photos = 3
+pts = []
 
 choice = input("Gostaria de abrir a camera ou um video? (camera/video): ").strip().lower()
 
@@ -33,8 +38,36 @@ else:
     print("Escolha inválida. Saindo...")
     exit()
 
+def draw_polygon(event, x, y, flags, param):
+    global pts
+    if event == cv2.EVENT_LBUTTONDOWN:
+        print(x,y)
+        pts.append([x, y])
+    elif event == cv2.EVENT_RBUTTONDOWN:
+        pts = []
+    
+# Function to check if a point is inside a polygon
+def inside_polygon(point,polygon):
+    result = cv2.pointPolygonTest(polygon, (point[0], point[1]), False)
+    if result == 1:
+        return True
+    else:
+        return False
+    
+def preprocess(img):
+    height, width = img.shape[:2]
+    ratio = height / width
+    img = cv2.resize(img, (640, int(640 * ratio)))
+
+    return img
+
+cv2.namedWindow('Video')
+cv2.setMouseCallback('Video', draw_polygon)
+
+
 while True:
     ret, frame = cap.read()
+    frame_detected = frame.copy()
     if not ret:
         break
 
@@ -64,7 +97,8 @@ while True:
             if class_name in ['fight', 'violent_move']:
                 cv2.putText(frame, 'Fight Detected!', (int(x1), int(y1) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
                 
-           
+        center_x = None
+        center_y = None
 
     # Display the number of people detected on the frame
     cv2.putText(frame, f'People Count: {person_count}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
@@ -75,6 +109,7 @@ while True:
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
+    
 
 cap.release()
 cv2.destroyAllWindows()
