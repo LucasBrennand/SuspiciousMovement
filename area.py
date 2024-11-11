@@ -2,6 +2,13 @@ import cv2
 import numpy as np
 import torch
 from ultralytics import YOLO
+import pygame
+import time
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email.mime.text import MIMEText
+from email import encoders
 
 # Initialize YOLOv8 model with the pre-trained weights
 model = YOLO('yolov8n.pt')  # Load the YOLOv8n model
@@ -10,6 +17,25 @@ model = YOLO('yolov8n.pt')  # Load the YOLOv8n model
 coco_class_names = {
     0: 'person', 43: 'knife', 80: 'gun'
 }
+
+# Define your own class names
+my_class_names = {
+    0: 'person',
+    1: 'gun',
+    2: 'fight',
+    3: 'violent_move',
+    # Add other classes as needed
+}
+
+# Example detection function (replace with your actual detection logic)
+def detect_objects(frame):
+    # This function should return a list of detections
+    # Each detection is a tuple (class_id, score, x1, y1, x2, y2)
+    # Replace this with your actual detection code
+    return [
+        (0, 0.95, 50, 50, 200, 200),  # Example detection
+        (1, 0.90, 300, 300, 400, 400),  # Example detection
+    ]
 
 # Variables for polygon points
 pts = []
@@ -41,12 +67,7 @@ def inside_polygon(point, polygon):
     result = cv2.pointPolygonTest(np.array(polygon), (point[0], point[1]), False)
     return result >= 0
 
-# Function to preprocess the frame
-def preprocess(img):
-    height, width = img.shape[:2]
-    ratio = height / width
-    img = cv2.resize(img, (640, int(640 * ratio)))
-    return img
+
 
 cv2.namedWindow('Video')
 cv2.setMouseCallback('Video', draw_polygon)
@@ -56,12 +77,48 @@ kernel = np.ones((10, 10), np.uint8)
 backSub = cv2.createBackgroundSubtractorMOG2(detectShadows=True, varThreshold=50, history=2800)
 thresh = 1500
 
-while True:
+
+person_count = 0
+start_time = None
+
+# Initialize pygame mixer
+pygame.mixer.init()
+alarm_sound = pygame.mixer.Sound('alarm.mp3')
+
+def send_email(image_path):
+    fromaddr = "lucas12234567@gmail.com"
+    toaddr = "lucas12234567@gmail.com"
+    msg = MIMEMultipart()
+    msg['From'] = fromaddr
+    msg['To'] = toaddr
+    msg['Subject'] = "Intruder Alert!!!"
+
+    body = "An intruder has been detected. See the attached image."
+    msg.attach(MIMEText(body, 'plain'))
+
+    attachment = open(image_path, "rb")
+    part = MIMEBase('application', 'octet-stream')
+    part.set_payload((attachment).read())
+    encoders.encode_base64(part)
+    part.add_header('Content-Disposition', "attachment; filename= %s" % image_path)
+    msg.attach(part)
+
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.starttls()
+    server.login(fromaddr, "nbue pgov qxkw sqwt")
+    text = msg.as_string()
+    server.sendmail(fromaddr, toaddr, text)
+    server.quit()
+
+# Initialize person count, timer, and email sent flag
+person_count = 0
+start_time = None
+email_sent = False
+
+while cap.isOpened():
     ret, frame = cap.read()
     if not ret:
         break
-
-    frame_detected = frame.copy()
 
     # Draw the polygon (restricted area) on the frame if points exist
     if len(pts) > 1:
@@ -86,29 +143,37 @@ while True:
                 x, y, w, h = cv2.boundingRect(cnt)
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
                 cv2.putText(frame, 'Intruder Detected', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (0, 255, 0), 1)
+                person_count = 1  # Set the person count to 1 when an intruder is detected
+
+                # Start or update the timer
+                if start_time is None:
+                    start_time = time.time()
+                elif time.time() - start_time >= 5 and not email_sent:
+                    alarm_sound.play()
+                    image_path = 'intruder.jpg'
+                    cv2.imwrite(image_path, frame)
+                    send_email(image_path)
+                    email_sent = True  # Set the flag to indicate that the email has been sent
+            else:
+                person_count = 0
+                start_time = None  # Reset the timer if no intruder is detected
+        else:
+            person_count = 0
+            start_time = None  # Reset the timer if no contours are found
 
     # Run object detection on the frame
-    results = model.predict(source=frame)
-    person_count = 0
+    detections = detect_objects(frame)
 
-    for result in results:
-        for box in result.boxes.data:
-            x1, y1, x2, y2, score, class_id = box
+    for detection in detections:
+        class_id, score, x1, y1, x2, y2 = detection
+        class_name = my_class_names.get(class_id, 'Unknown')
 
-            class_id = int(class_id)
-            class_name = coco_class_names.get(class_id, 'Unknown')
 
-            if class_name == 'person':
-                person_count += 1
+        cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+        cv2.putText(frame, f'{class_name}: {score:.2f}', (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
 
-            cv2.rectangle(frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-            cv2.putText(frame, f'{class_name}: {score:.2f}', (int(x1), int(y1) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-
-            if class_name == 'gun':
-                cv2.putText(frame, 'Gun Detected!', (int(x1), int(y1) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
-
-            if class_name in ['fight', 'violent_move']:
-                cv2.putText(frame, 'Fight Detected!', (int(x1), int(y1) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
+        if class_name in ['fight', 'violent_move']:
+            cv2.putText(frame, 'Fight Detected!', (int(x1), int(y1) - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
 
     # Display the number of people detected
     cv2.putText(frame, f'People Count: {person_count}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
@@ -116,7 +181,8 @@ while True:
     # Show the frame
     cv2.imshow('Video', frame)
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    # Add a delay to control the frame rate
+    if cv2.waitKey(30) & 0xFF == ord('q'):
         break
 
 cap.release()
